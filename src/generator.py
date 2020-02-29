@@ -237,7 +237,7 @@ class ReverseAttention(nn.Module):
 
 # --------------------------------------
 # Learnable Bidirectional Attention Maps
-#---------------------------------------
+# --------------------------------------
 class LBAM(nn.Module):
 
     def __init__(self, in_channels, out_channels):
@@ -263,9 +263,53 @@ class LBAM(nn.Module):
         self.reverse_attention_layer_5 = ReverseAttentionLayer(512, 512)
         self.reverse_attention_layer_6 = ReverseAttentionLayer(512, 512)
 
+        self.dc_1 = ReverseAttention(512, 512, bn_channels=1024)
+        self.dc_2 = ReverseAttention(512 * 2, 512, bn_channels=1024)
+        self.dc_3 = ReverseAttention(512 * 2, 512, bn_channels=1024)
+        self.dc_4 = ReverseAttention(512 * 2, 256, bn_channels=512)
+        self.dc_5 = ReverseAttention(256 * 2, 128, bn_channels=256)
+        self.dc_6 = ReverseAttention(128 * 2, 64, bn_channels=128)
+        self.dc_7 = nn.ConvTranspose2d(64 * 2, out_channels, kernel_size=4, stride=2, padding=1, bias=False)
 
+        self.tanh = nn.Tanh()
 
+    def forward(self, input_images, input_masks):
 
+        ec_features_1, ec_masks_1, skip_features_1, ec_gaussian_1 = self.ec_1(input_images, input_masks)
+        ec_features_2, ec_masks_2, skip_features_2, ec_gaussian_2 = self.ec_2(ec_features_1, ec_masks_1)
+        ec_features_3, ec_masks_3, skip_features_3, ec_gaussian_3 = self.ec_3(ec_features_2, ec_masks_2)
+        ec_features_4, ec_masks_4, skip_features_4, ec_gaussian_4 = self.ec_4(ec_features_3, ec_masks_3)
+        ec_features_5, ec_masks_5, skip_features_5, ec_gaussian_5 = self.ec_5(ec_features_4, ec_masks_4)
+        ec_features_6, ec_masks_6, skip_features_6, ec_gaussian_6 = self.ec_6(ec_features_5, ec_masks_5)
+        ec_features_7, ec_masks_7, skip_features_7, ec_gaussian_7 = self.ec_7(ec_features_6, ec_masks_6)
 
+        dc_masks_1, dc_gaussian_1 = self.reverse_attention_layer_1(1 - input_masks)
+        dc_masks_2, dc_gaussian_2 = self.reverse_attention_layer_2(dc_masks_1)
+        dc_masks_3, dc_gaussian_3 = self.reverse_attention_layer_3(dc_masks_2)
+        dc_masks_4, dc_gaussian_4 = self.reverse_attention_layer_4(dc_masks_3)
+        dc_masks_5, dc_gaussian_5 = self.reverse_attention_layer_5(dc_masks_4)
+        dc_masks_6, dc_gaussian_6 = self.reverse_attention_layer_6(dc_masks_5)
 
+        concat_gaussian_6 = torch.cat((ec_gaussian_6, dc_gaussian_6), dim=1)
+        dc_features_1 = self.dc_1(skip_features_6, ec_features_7, concat_gaussian_6)
 
+        concat_gaussian_5 = torch.cat((ec_gaussian_5, dc_gaussian_5), dim=1)
+        dc_features_2 = self.dc_2(skip_features_5, dc_features_1, concat_gaussian_5)
+
+        concat_gaussian_4 = torch.cat((ec_gaussian_4, dc_gaussian_4), dim=1)
+        dc_features_3 = self.dc_3(skip_features_4, dc_features_2, concat_gaussian_4)
+
+        concat_gaussian_3 = torch.cat((ec_gaussian_3, dc_gaussian_3), dim=1)
+        dc_features_4 = self.dc_4(skip_features_3, dc_features_3, concat_gaussian_3)
+
+        concat_gaussian_2 = torch.cat((ec_gaussian_2, dc_gaussian_2), dim=1)
+        dc_features_5 = self.dc_5(skip_features_2, dc_features_4, concat_gaussian_2)
+
+        concat_gaussian_1 = torch.cat((ec_gaussian_1, dc_gaussian_1), dim=1)
+        dc_features_6 = self.dc_6(skip_features_1, dc_features_5, concat_gaussian_1)
+
+        dc_features_7 = self.dc_7(dc_features_6)
+
+        output = (self.tanh(dc_features_7) + 1) / 2
+
+        return output
