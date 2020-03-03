@@ -11,8 +11,11 @@ from torchvision.utils import save_image
 from src.dataset import ImageDataset
 from src.generator import LBAM
 from src.discriminator import Discriminator
+from src.utils import VGG16FeatureExtractor
 from src.loss import generator_loss, discriminator_loss, calc_gradient_penalty
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--num_workers', type=int, default=4, help='workers for dataloader')
@@ -27,8 +30,8 @@ parser.add_argument('--lambda_gp', type=float, default=10.0)
 parser.add_argument('--batch_size', type=int, default=16)
 parser.add_argument('--load_size', type=int, default=350, help='image loading size')
 parser.add_argument('--crop_size', type=int, default=256, help='image training size')
-parser.add_argument('--image_root', type=str, default='')
-parser.add_argument('--mask_root', type=str, default='')
+parser.add_argument('--image_root', type=str, default='/data/guoxiefan/datasets/CelebA/img_align_celeba')
+parser.add_argument('--mask_root', type=str, default='/data/guoxiefan/datasets/PconvIrregularMask/train_mask/disocclusion_img_mask')
 parser.add_argument('--start_iter', type=int, default=1, help='start iter')
 parser.add_argument('--train_epochs', type=int, default=500, help='training epochs')
 args = parser.parse_args()
@@ -37,6 +40,7 @@ args = parser.parse_args()
 # GPU setting
 # -----------
 os.environ['CUDA_VISIBLE_DEVICES'] = '2, 4, 5, 6'
+# CUDA_VISIBLE_DEVICES='2, 4, 5, 6' python -u train.py | tee -a ckpt-path
 is_cuda = torch.cuda.is_available()
 if is_cuda:
     print('Cuda is available')
@@ -62,8 +66,7 @@ data_loader = DataLoader(
     shuffle=True,
     num_workers=args.num_workers,
     drop_last=False,
-    # pin_memory=True
-    # http://www.voidcn.com/article/p-fsdktdik-bry.html
+    pin_memory=True
 )
 
 # -----
@@ -71,6 +74,7 @@ data_loader = DataLoader(
 # -----
 generator = LBAM(4, 3)
 discriminator = Discriminator(3)
+extractor = VGG16FeatureExtractor()
 
 # ----------
 # load model
@@ -94,6 +98,7 @@ if is_cuda:
 
     generator = generator.cuda()
     discriminator = discriminator.cuda()
+    extractor = extractor.cuda()
 
     num_GPUS = torch.cuda.device_count()
     print('The number of GPU is ', num_GPUS)
@@ -132,10 +137,10 @@ for epoch in range(start_iter, args.train_epochs + 1):
 
         outputs = generator(input_images, masks)
 
-        loss_adversarial = discriminator(outputs, masks).mean()
+        d_fake = discriminator(outputs, masks).mean()
 
         G_loss = generator_loss(args.log_dir + '/Generator', input_images[:, 0:3, :, :],
-                                masks, outputs, ground_truths, count, is_cuda, loss_adversarial)
+                                masks, outputs, ground_truths, count, extractor, d_fake)
         G_loss.backward()
         G_optimizer.step()
 

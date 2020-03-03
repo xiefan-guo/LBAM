@@ -55,17 +55,18 @@ def discriminator_loss(log_dir, count, d_real, d_fake, gp):
 
     loss = -1.0 * d_real + d_fake + gp
     writer.add_scalar('D loss', loss.item(), count)
+    writer.close()
 
     return loss
 
 
-def generator_loss(log_dir, inputs, masks, outputs, ground_truths, count, is_cuda, loss_adversarial):
+def generator_loss(log_dir, inputs, masks, outputs, ground_truths, count, extractor, loss_adversarial):
 
     l1 = nn.L1Loss()
     writer = SummaryWriter(log_dir)
-    extractor = VGG16FeatureExtractor()
-    if is_cuda:
-        extractor = extractor.cuda()
+    # extractor = VGG16FeatureExtractor()
+    # if is_cuda:
+    #     extractor = extractor.cuda()
 
     comp = masks * inputs + (1 - masks) * outputs
 
@@ -103,5 +104,7 @@ def generator_loss(log_dir, inputs, masks, outputs, ground_truths, count, is_cud
     writer.add_scalar('G style loss', loss_style.item(), count)
     writer.add_scalar('G adversarial loss', loss_adversarial.item(), count)
     writer.add_scalar('G total loss', total_loss.item(), count)
+
+    writer.close()
 
     return total_loss
