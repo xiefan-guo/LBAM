@@ -269,7 +269,7 @@ class LBAM(nn.Module):
         self.dc_4 = ReverseAttention(512 * 2, 256, bn_channels=512)
         self.dc_5 = ReverseAttention(256 * 2, 128, bn_channels=256)
         self.dc_6 = ReverseAttention(128 * 2, 64, bn_channels=128)
-        self.dc_7 = nn.ConvTranspose2d(64 * 2, out_channels, kernel_size=4, stride=2, padding=1, bias=False)
+        self.dc_7 = nn.ConvTranspose2d(64 * 2, out_channels, kernel_size=4, stride=2, padding=1, bias=True)
 
         self.tanh = nn.Tanh()
 
@@ -313,3 +313,5 @@ class LBAM(nn.Module):
         output = (self.tanh(dc_features_7) + 1) / 2
 
         return output
+
+
