@@ -113,7 +113,7 @@ if is_cuda:
 # optimizer
 # ---------
 G_optimizer = optim.Adam(generator.parameters(), lr=args.lr, betas=(args.b1, args.b2))
-D_optimizer = optim.Adam(discriminator.parameters(), lr=args.lr, betas=(args.b1, args.b2))
+D_optimizer = optim.Adam(discriminator.parameters(), lr=args.lr * 0.1, betas=(args.b1, args.b2))
 
 # --------
 # Training
